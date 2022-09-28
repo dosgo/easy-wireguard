@@ -1,9 +1,13 @@
 package tool
-import(	"net"
-"log"
-"encoding/hex"
-"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+
+import (
+	"encoding/hex"
+	"log"
+	"net"
+
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
+
 // MustHexKey decodes a hex string s as a key or panics.
 func MustHexKey(s string) wgtypes.Key {
 	b, err := hex.DecodeString(s)
@@ -36,3 +40,6 @@ func MustCIDR(s string) net.IPNet {
 
 	return *cidr
 }
+
+func KeyPtr(k wgtypes.Key) *wgtypes.Key { return &k }
+func IntPtr(v int) *int                 { return &v }

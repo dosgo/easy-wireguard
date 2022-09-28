@@ -1,0 +1,14 @@
+流程
+1.创建服务器公私钥对
+2.生成服务器配置文件
+3.启动wg网络接口    wg setconf wg0 /etc/wireguard/wg0.conf
+4.生成节点公私钥对
+4.添加节点  //sudo wg set wg0 peer FCXYovwMFf2oMHrQjbhTYk1TU/Wi1ElwzPJfzXtC9HQ= allowed-ips 0.0.0.0/0 endpoint 72.105.221.122:39814
+5.固化服务器配置文件  wg showconf wg0 > /etc/wireguard/wg0.conf
+6.生成客户端配置文件
+
+
+
+
+
+
