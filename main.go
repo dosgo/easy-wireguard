@@ -104,20 +104,18 @@ func addPeer(name string) {
 }
 
 func delPeer(name string, pubKey string) {
-	peerKey, _ := wgtypes.GeneratePrivateKey()
 	//读取服务器配置文件
 	ServerConf := tool.FileToConf(name)
 	publicKey, _ := wgtypes.ParseKey(pubKey)
-	for _, peer := range ServerConf.Peers {
-		if peer.PublicKey == publicKey {
 
+	for i := 0; i < len(ServerConf.Peers); i++ {
+		if ServerConf.Peers[i].PublicKey == publicKey {
+			ServerConf.Peers = append(ServerConf.Peers[:i], ServerConf.Peers[i+1:]...)
+			i--
 		}
 	}
 
-	ServerConf.Peers = append(ServerConf.Peers, peerInfo)
-	//生成server配置文件
+	//修改server配置文件
 	tool.ConfToFile(name, ServerConf)
-	//生成peer配置文件
-	pubKeyByte := peerKey.PublicKey()
-	tool.ConfToFile(name+"_peer_"+hex.EncodeToString(pubKeyByte[:]), peerConf)
+	os.Remove(name + "_peer_" + hex.EncodeToString(publicKey[:]) + ".conf")
 }
