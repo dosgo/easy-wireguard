@@ -84,7 +84,7 @@ func addPeer(name string) {
 	//读取服务器配置文件
 	ServerConf, address := tool.FileToConf(name)
 	//生成peer配置文件
-	var allowedIP = tool.MustCIDR("0.0.0.0/0")
+	var allowedIP = tool.MustCIDR("192.168.6.1/32")
 	var allowedIPs = []net.IPNet{
 		allowedIP,
 	}
