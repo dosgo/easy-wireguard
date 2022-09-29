@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/md5"
 	"easy-wireguard/tool"
 	"encoding/hex"
 	"fmt"
@@ -53,7 +54,7 @@ func start(name string) {
 	if err != nil {
 		genServerConf(name)
 	}
-	conf := tool.FileToConf(name)
+	conf, _ := tool.FileToConf(name)
 	go tool.WgUp(name)
 	time.Sleep(time.Second * 10)
 	client, _ := wgctrl.New()
@@ -75,15 +76,17 @@ func genServerConf(name string) {
 		ListenPort: tool.IntPtr(51820),
 		//ReplacePeers: true,
 	}
-	tool.ConfToFile(name, conf)
+	var allowedIP = tool.MustCIDR("192.168.6.1/32")
+	tool.ConfToFile(name, conf, &allowedIP)
 }
 func addPeer(name string) {
 	peerKey, _ := wgtypes.GeneratePrivateKey()
 	//读取服务器配置文件
-	ServerConf := tool.FileToConf(name)
+	ServerConf, address := tool.FileToConf(name)
 	//生成peer配置文件
+	var allowedIP = tool.MustCIDR("0.0.0.0/0")
 	var allowedIPs = []net.IPNet{
-		tool.MustCIDR("192.168.6.1/32"),
+		allowedIP,
 	}
 	ip, _ := tool.GetPublicIP()
 	var endpoint = tool.MustUDPAddr(ip + ":" + strconv.Itoa(*ServerConf.ListenPort))
@@ -104,15 +107,19 @@ func addPeer(name string) {
 	}
 	ServerConf.Peers = append(ServerConf.Peers, peerInfo)
 	//生成server配置文件
-	tool.ConfToFile(name, ServerConf)
+	tool.ConfToFile(name, ServerConf, &address)
+	address.IP[3] = address.IP[3] + 1
 	//生成peer配置文件
 	pubKeyByte := peerKey.PublicKey()
-	tool.ConfToFile(name+"_peer_"+hex.EncodeToString(pubKeyByte[:]), peerConf)
+	var h = md5.New()
+	h.Write(pubKeyByte[:])
+	md5Str := hex.EncodeToString(h.Sum(nil))
+	tool.ConfToFile(name+"_peer_"+md5Str[:5], peerConf, &address)
 }
 
 func delPeer(name string, pubKey string) {
 	//读取服务器配置文件
-	ServerConf := tool.FileToConf(name)
+	ServerConf, address := tool.FileToConf(name)
 	publicKey, _ := wgtypes.ParseKey(pubKey)
 
 	for i := 0; i < len(ServerConf.Peers); i++ {
@@ -122,6 +129,6 @@ func delPeer(name string, pubKey string) {
 		}
 	}
 	//修改server配置文件
-	tool.ConfToFile(name, ServerConf)
+	tool.ConfToFile(name, ServerConf, &address)
 	os.Remove(name + "_peer_" + hex.EncodeToString(publicKey[:]) + ".conf")
 }

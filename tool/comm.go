@@ -53,13 +53,16 @@ func MustCIDR(s string) net.IPNet {
 func KeyPtr(k wgtypes.Key) *wgtypes.Key { return &k }
 func IntPtr(v int) *int                 { return &v }
 
-func ConfToFile(name string, conf wgtypes.Config) {
+func ConfToFile(name string, conf wgtypes.Config, address *net.IPNet) {
 
 	cfg := ini.Empty(ini.LoadOptions{AllowNonUniqueSections: true})
 	section, _ := cfg.NewSection("Interface")
 	section.NewKey("PrivateKey", conf.PrivateKey.String())
 	if conf.ListenPort != nil {
 		section.NewKey("ListenPort", strconv.Itoa(*conf.ListenPort))
+	}
+	if address != nil {
+		section.NewKey("Address", address.String())
 	}
 	//section.NewKey("ReplacePeers", strconv.FormatBool(conf.ReplacePeers))
 	for _, value := range conf.Peers {
@@ -86,8 +89,9 @@ func ConfToFile(name string, conf wgtypes.Config) {
 	cfg.SaveTo(name + ".conf")
 }
 
-func FileToConf(name string) wgtypes.Config {
+func FileToConf(name string) (wgtypes.Config, net.IPNet) {
 	var conf = wgtypes.Config{}
+	var address net.IPNet
 	cfg, err := ini.LoadSources(ini.LoadOptions{AllowNonUniqueSections: true}, name+".conf")
 	if err == nil {
 		sections := cfg.Sections()
@@ -99,6 +103,7 @@ func FileToConf(name string) wgtypes.Config {
 				conf.ListenPort = &listenPort
 				//replacePeers, _ := section.Key("ReplacePeers").Bool()
 				conf.ReplacePeers = true // replacePeers
+				address = MustCIDR(section.Key("Address").String())
 			}
 			if section.Name() == "Peer" {
 				var peerItem = wgtypes.PeerConfig{}
@@ -127,7 +132,7 @@ func FileToConf(name string) wgtypes.Config {
 			}
 		}
 	}
-	return conf
+	return conf, address
 }
 
 func IsPublicIP(ip net.IP) bool {
