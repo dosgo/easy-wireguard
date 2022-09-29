@@ -12,6 +12,11 @@ import (
 	"golang.zx2c4.com/wireguard/tun"
 )
 
+func WgUp1(interfaceName string) error {
+
+	return nil
+}
+
 func WgUp(interfaceName string) error {
 	tun, err := tun.CreateTUN(interfaceName, 0)
 	if err == nil {
@@ -29,11 +34,13 @@ func WgUp(interfaceName string) error {
 	device := device.NewDevice(tun, conn.NewDefaultBind(), logger)
 	err = device.Up()
 	if err != nil {
+		fmt.Printf("device err:%+v\r\n", err)
 		return err
 	}
 
 	uapi, err := ipc.UAPIListen(interfaceName)
 	if err != nil {
+		fmt.Printf("uapi err:%+v\r\n", err)
 		return err
 	}
 

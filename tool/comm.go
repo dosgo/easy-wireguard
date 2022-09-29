@@ -28,6 +28,11 @@ func MustHexKey(s string) wgtypes.Key {
 }
 
 func MustUDPAddr(s string) *net.UDPAddr {
+	if strings.Count(s, ":") > 3 {
+		pos := strings.LastIndex(s, ":")
+		port := s[pos+1:]
+		s = "[" + s[:pos] + "]" + ":" + port
+	}
 	a, err := net.ResolveUDPAddr("udp", s)
 	if err != nil {
 		log.Printf("wgtest: failed to resolve UDP address: %v", err)
@@ -56,7 +61,7 @@ func ConfToFile(name string, conf wgtypes.Config) {
 	if conf.ListenPort != nil {
 		section.NewKey("ListenPort", strconv.Itoa(*conf.ListenPort))
 	}
-	section.NewKey("ReplacePeers", strconv.FormatBool(conf.ReplacePeers))
+	//section.NewKey("ReplacePeers", strconv.FormatBool(conf.ReplacePeers))
 	for _, value := range conf.Peers {
 		section, err := cfg.NewSection("Peer")
 		if err == nil {
@@ -83,10 +88,8 @@ func ConfToFile(name string, conf wgtypes.Config) {
 
 func FileToConf(name string) wgtypes.Config {
 	var conf = wgtypes.Config{}
-	cfg, err := ini.Load(name + ".conf")
-
+	cfg, err := ini.LoadSources(ini.LoadOptions{AllowNonUniqueSections: true}, name+".conf")
 	if err == nil {
-
 		sections := cfg.Sections()
 		for _, section := range sections {
 			if section.Name() == "Interface" {
@@ -94,8 +97,8 @@ func FileToConf(name string) wgtypes.Config {
 				conf.PrivateKey = KeyPtr(privateKey)
 				listenPort := section.Key("ListenPort").MustInt()
 				conf.ListenPort = &listenPort
-				replacePeers, _ := section.Key("ReplacePeers").Bool()
-				conf.ReplacePeers = replacePeers
+				//replacePeers, _ := section.Key("ReplacePeers").Bool()
+				conf.ReplacePeers = true // replacePeers
 			}
 			if section.Name() == "Peer" {
 				var peerItem = wgtypes.PeerConfig{}

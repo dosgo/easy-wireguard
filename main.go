@@ -33,6 +33,9 @@ func main() {
 	} else if os.Args[1] == "addPeer" {
 		//添加addPeer节点
 		addPeer(name)
+	} else if os.Args[1] == "delPeer" {
+		//添加addPeer节点
+		delPeer(name, os.Args[3])
 	} else {
 		help(fName)
 	}
@@ -42,6 +45,7 @@ func help(fName string) {
 	fmt.Println(fName + " start  [name]")
 	fmt.Println(fName + " genServerConf  [name]")
 	fmt.Println(fName + " addPeer  [name]")
+	fmt.Println(fName + " delPeer  name pubkey")
 }
 
 func start(name string) {
@@ -50,11 +54,14 @@ func start(name string) {
 		genServerConf(name)
 	}
 	conf := tool.FileToConf(name)
-	client, _ := wgctrl.New()
-	defer client.Close()
 	go tool.WgUp(name)
-	time.Sleep(time.Second * 35)
-	client.ConfigureDevice(name, conf)
+	time.Sleep(time.Second * 10)
+	client, _ := wgctrl.New()
+	xx, err := client.Devices()
+	fmt.Printf("Devices:%+v err:%+v\r\n", xx, err)
+	defer client.Close()
+	err = client.ConfigureDevice(name, conf)
+	select {}
 }
 func genServerConf(name string) {
 	_, err := os.Stat(name + ".conf")
@@ -64,9 +71,9 @@ func genServerConf(name string) {
 	}
 	serverKey, _ := wgtypes.GeneratePrivateKey()
 	var conf = wgtypes.Config{
-		PrivateKey:   tool.KeyPtr(serverKey),
-		ListenPort:   tool.IntPtr(51820),
-		ReplacePeers: true,
+		PrivateKey: tool.KeyPtr(serverKey),
+		ListenPort: tool.IntPtr(51820),
+		//ReplacePeers: true,
 	}
 	tool.ConfToFile(name, conf)
 }
@@ -114,7 +121,6 @@ func delPeer(name string, pubKey string) {
 			i--
 		}
 	}
-
 	//修改server配置文件
 	tool.ConfToFile(name, ServerConf)
 	os.Remove(name + "_peer_" + hex.EncodeToString(publicKey[:]) + ".conf")
