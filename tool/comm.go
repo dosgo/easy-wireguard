@@ -2,6 +2,7 @@ package tool
 
 import (
 	"encoding/hex"
+	"fmt"
 	"log"
 	"net"
 	"strconv"
@@ -53,7 +54,7 @@ func MustCIDR(s string) net.IPNet {
 func KeyPtr(k wgtypes.Key) *wgtypes.Key { return &k }
 func IntPtr(v int) *int                 { return &v }
 
-func ConfToFile(name string, conf wgtypes.Config, address *net.IPNet) {
+func ConfToFile(confFile string, conf wgtypes.Config, address string, server bool) {
 
 	cfg := ini.Empty(ini.LoadOptions{AllowNonUniqueSections: true})
 	section, _ := cfg.NewSection("Interface")
@@ -61,9 +62,14 @@ func ConfToFile(name string, conf wgtypes.Config, address *net.IPNet) {
 	if conf.ListenPort != nil {
 		section.NewKey("ListenPort", strconv.Itoa(*conf.ListenPort))
 	}
-	if address != nil {
-		section.NewKey("Address", address.String())
+	if address != "" {
+		section.NewKey("Address", address)
 	}
+	if server {
+		section.NewKey("PostUp", "iptables -A FORWARD -i %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE")
+		section.NewKey("PostDown", "iptables -D FORWARD -i %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE")
+	}
+
 	//section.NewKey("ReplacePeers", strconv.FormatBool(conf.ReplacePeers))
 	for _, value := range conf.Peers {
 		section, err := cfg.NewSection("Peer")
@@ -86,13 +92,13 @@ func ConfToFile(name string, conf wgtypes.Config, address *net.IPNet) {
 		}
 
 	}
-	cfg.SaveTo(name + ".conf")
+	cfg.SaveTo(confFile)
 }
 
-func FileToConf(name string) (wgtypes.Config, net.IPNet) {
+func FileToConf(confFile string) (wgtypes.Config, string) {
 	var conf = wgtypes.Config{}
-	var address net.IPNet
-	cfg, err := ini.LoadSources(ini.LoadOptions{AllowNonUniqueSections: true}, name+".conf")
+	var address string
+	cfg, err := ini.LoadSources(ini.LoadOptions{AllowNonUniqueSections: true}, confFile)
 	if err == nil {
 		sections := cfg.Sections()
 		for _, section := range sections {
@@ -103,7 +109,7 @@ func FileToConf(name string) (wgtypes.Config, net.IPNet) {
 				conf.ListenPort = &listenPort
 				//replacePeers, _ := section.Key("ReplacePeers").Bool()
 				conf.ReplacePeers = true // replacePeers
-				address = MustCIDR(section.Key("Address").String())
+				address = section.Key("Address").String()
 			}
 			if section.Name() == "Peer" {
 				var peerItem = wgtypes.PeerConfig{}
@@ -199,4 +205,60 @@ func GetPublicIP() (ip string, err error) {
 		}
 	}
 	return
+}
+
+func GetNextAvailableIP(cidrStr string, usedIPs []string) (string, error) {
+	// 解析CIDR
+	ip, ipNet, err := net.ParseCIDR(cidrStr)
+	if err != nil {
+		return "", fmt.Errorf("无效CIDR格式: %v", err)
+	}
+	// 转换为IPv4
+	ip = ip.To4()
+	if ip == nil {
+		return "", fmt.Errorf("仅支持IPv4")
+	}
+
+	// 预计算网络地址和广播地址
+	networkIP := ipNet.IP.To4()
+	mask := ipNet.Mask
+	broadcast := make(net.IP, len(networkIP))
+	copy(broadcast, networkIP)
+	for i := range broadcast {
+		broadcast[i] |= ^mask[i]
+	}
+
+	// 构建已用IP哈希表
+	usedMap := make(map[string]uint8)
+	for _, u := range usedIPs {
+		usedMap[u] = 1
+	}
+
+	// 从初始IP开始遍历
+	currentIP := make(net.IP, len(ip))
+	copy(currentIP, ip)
+	for {
+		// 递增IP (直接内联实现)
+		for i := len(currentIP) - 1; i >= 0; i-- {
+			currentIP[i]++
+			if currentIP[i] != 0 {
+				break
+			}
+		}
+
+		// 检查是否超出子网
+		if !ipNet.Contains(currentIP) {
+			return "", fmt.Errorf("子网 %s 已满", ipNet.String())
+		}
+
+		// 跳过网络地址和广播地址
+		if currentIP.Equal(networkIP) || currentIP.Equal(broadcast) {
+			continue
+		}
+
+		// 检查是否已被占用
+		if _, ok := usedMap[currentIP.String()]; !ok {
+			return currentIP.String(), nil
+		}
+	}
 }
