@@ -61,19 +61,23 @@ func install(name string) {
 }
 
 func start(name string) {
-	confFile := getConfPath(name)
+	confFile := tool.GetConfPath(name)
 	_, err := os.Stat(confFile)
 	if err != nil {
 		genServerConf(confFile)
 	}
 	conf, _ := tool.FileToConf(confFile)
-	//runFlag := make(chan error)
-	//tool.WinWgUp(name, runFlag)
-	tool.WgUp(name)
-	time.Sleep(time.Second * 10)
-	client, _ := wgctrl.New()
+	go tool.WgUp(name)
+	time.Sleep(time.Second * 5)
+	client, err := wgctrl.New()
+	if err != nil {
+		fmt.Printf("wgctrl Err:%+v\r\n", err)
+	}
 	defer client.Close()
 	err = client.ConfigureDevice(name, conf)
+	if err != nil {
+		fmt.Printf("ConfigureDevice Err:%+v\r\n", err)
+	}
 	// 捕获系统信号
 	quit := make(chan os.Signal)
 	// 前台时，按 ^C 时触发
@@ -97,7 +101,7 @@ func genServerConf(confFile string) {
 	tool.ConfToFile(confFile, conf, "192.168.6.1/24", true)
 }
 func addPeer(name string) {
-	confFile := getConfPath(name)
+	confFile := tool.GetConfPath(name)
 	peerKey, _ := wgtypes.GeneratePrivateKey()
 	//读取服务器配置文件
 	ServerConf, address := tool.FileToConf(confFile)
@@ -144,11 +148,11 @@ func addPeer(name string) {
 	tool.ConfToFile(confFile, ServerConf, address, true)
 
 	//生成peer配置文件
-	tool.ConfToFile(getConfPath(name+"_peer_"+_clientAddress), peerConf, clientAddress, false)
+	tool.ConfToFile(tool.GetConfPath(name+"_peer_"+_clientAddress), peerConf, clientAddress, false)
 }
 
 func delPeer(name string, pubKey string) {
-	confFile := getConfPath(name)
+	confFile := tool.GetConfPath(name)
 	//读取服务器配置文件
 	ServerConf, address := tool.FileToConf(confFile)
 	publicKey, _ := wgtypes.ParseKey(pubKey)
@@ -165,9 +169,5 @@ func delPeer(name string, pubKey string) {
 	}
 	//修改server配置文件
 	tool.ConfToFile(confFile, ServerConf, address, true)
-	os.Remove(getConfPath(name + "_peer_" + clientAddr))
-}
-
-func getConfPath(name string) string {
-	return "./conf" + "/" + name + ".conf"
+	os.Remove(tool.GetConfPath(name + "_peer_" + clientAddr))
 }
