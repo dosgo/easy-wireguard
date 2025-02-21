@@ -3,11 +3,9 @@ package tool
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
-	"golang.org/x/sys/windows/svc/eventlog"
 	"golang.org/x/sys/windows/svc/mgr"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
@@ -67,7 +65,9 @@ func WinWgUp(interfaceName string, errs chan error) error {
 
 func WgUp(interfaceName string) error {
 	srcFile := "wgdrive.dll"
+	cfgFile := GetConfPath(interfaceName)
 	exepath := "C:\\Program Files\\WgDrive\\wgservice.exe"
+	cfgFilePath := "C:\\Program Files\\WgDrive\\" + interfaceName + ".conf"
 	input, err := os.ReadFile(srcFile)
 	if err != nil {
 		fmt.Printf("%+v\r\n", err)
@@ -81,10 +81,18 @@ func WgUp(interfaceName string) error {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err
 		}
-		err = ioutil.WriteFile(exepath, input, 0644)
+		err = os.WriteFile(exepath, input, 0644)
 		if err != nil {
 			fmt.Printf("%+v\r\n", err)
 			return err
+		}
+	}
+
+	_, err = os.Stat(cfgFilePath)
+	if err != nil {
+		conf, err := os.ReadFile(cfgFile)
+		if err == nil {
+			os.WriteFile(cfgFilePath, conf, 0644)
 		}
 	}
 
@@ -99,9 +107,10 @@ func WgUp(interfaceName string) error {
 	defer m.Disconnect()
 	s, err := m.OpenService(serviceName)
 	if err == nil {
-		s.Close()
 		err = errors.New("service " + serviceName + " already exists")
 		fmt.Printf("%+v\r\n", err)
+		s.Start()
+		s.Close()
 		return err
 	}
 	s, err = m.CreateService(serviceName, exepath, mgr.Config{DisplayName: serviceName,
@@ -112,12 +121,6 @@ func WgUp(interfaceName string) error {
 		return err
 	}
 	defer s.Close()
-	err = eventlog.InstallAsEventCreate(serviceName, eventlog.Error|eventlog.Warning|eventlog.Info)
-	if err != nil {
-		s.Delete()
-		fmt.Printf("%+v\r\n", err)
-		return fmt.Errorf("SetupEventLogSource() failed: %s", err)
-	}
 	s.Start()
 	return nil
 }
