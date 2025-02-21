@@ -67,8 +67,9 @@ func start(name string) {
 		genServerConf(confFile)
 	}
 	conf, _ := tool.FileToConf(confFile)
-	runFlag := make(chan error)
-	tool.WinWgUp(name, runFlag)
+	//runFlag := make(chan error)
+	//tool.WinWgUp(name, runFlag)
+	tool.WgUp(name)
 	time.Sleep(time.Second * 10)
 	client, _ := wgctrl.New()
 	defer client.Close()
