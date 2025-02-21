@@ -3,18 +3,14 @@ The configuration of Wireguard is too complicated, the goal of this project is t
 
 
 
-easy-wireguard  start 
-
+## easy-wireguard  start 
 Startup will automatically generate the configuration of wg0
-
-easy-wireguard  genServerConf 
-
+ 
+## easy-wireguard  genServerConf 
 Generate configuration
 
-easy-wireguard  addPeer 
-
+## easy-wireguard  addPeer 
 Adding a peer node
 
-easy-wireguard  delPeer wg0  qF+t29sO4iSJvlu250ArAVJQbjWzf5V+OoocLgqxvmI=
-
+## easy-wireguard  delPeer wg0  qF+t29sO4iSJvlu250ArAVJQbjWzf5V+OoocLgqxvmI=
 Delete the peer node with the public key qF+t29sO4iSJvlu250ArAVJQbjWzf5V+OoocLgqxvmI=
