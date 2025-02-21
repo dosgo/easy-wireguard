@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"unsafe"
 
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc/mgr"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
@@ -60,6 +62,7 @@ func WinWgUp(interfaceName string, errs chan error) error {
 	// clean up
 	uapi.Close()
 	device.Close()
+
 	return nil
 }
 
@@ -122,5 +125,30 @@ func WgUp(interfaceName string) error {
 	}
 	defer s.Close()
 	s.Start()
+	return nil
+}
+
+const (
+	_NCBCONFIG = 0x00000000
+)
+
+func SetupWindowsNetwork(ifaceName, serverIP string, subnetMask string) error {
+
+	// 加载 iphlpapi.dll
+	dll := windows.NewLazyDLL("iphlpapi.dll")
+	proc := dll.NewProc("SetAdapterIpAddress")
+	fmt.Printf("serverIP:%s\r\n", serverIP)
+	fmt.Printf("subnetMask:%s\r\n", subnetMask)
+	// 调用 API（需根据实际参数调整）
+	ret, _, err := proc.Call(
+		uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(ifaceName))),
+		uintptr(_NCBCONFIG),
+		uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(serverIP))),
+		uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(subnetMask))),
+	)
+
+	if ret != 0 {
+		fmt.Printf("API 调用失败: %v\n", err)
+	}
 	return nil
 }
