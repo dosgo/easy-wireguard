@@ -68,7 +68,7 @@ func WgUp(interfaceName string) error {
 	exepath := "C:\\Program Files\\WgDrive\\wgservice.exe"
 	_, err := os.Stat(srcFile)
 	if err != nil {
-		fmt.Printf("wgdrive.dll not found")
+		fmt.Printf("wgdrive.dll not found\r\n")
 		return err
 	}
 	input, err := os.ReadFile(srcFile)
