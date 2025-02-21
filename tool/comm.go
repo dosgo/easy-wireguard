@@ -262,3 +262,8 @@ func GetNextAvailableIP(cidrStr string, usedIPs []string) (string, error) {
 		}
 	}
 }
+
+func GetConfPath(name string) string {
+	return "./conf" + "/" + name + ".conf"
+}
+
