@@ -123,3 +123,10 @@ func WgUp(interfaceName string) error {
 	device.Close()
 	return nil
 }
+func SetupWindowsNetwork(ifaceName, serverIP string, subnetMask string) error {
+	return nil
+}
+func WinWgUp(interfaceName string, errs chan error) error {
+
+	return nil
+}
