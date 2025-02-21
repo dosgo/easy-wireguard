@@ -1,19 +1,23 @@
 package main
 
 import (
-	"crypto/md5"
 	"easy-wireguard/tool"
-	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"time"
 
 	"golang.zx2c4.com/wireguard/wgctrl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
+
+func init() {
+	os.Mkdir("./conf", 0755)
+}
 
 func main() {
 	var name = "wg0"
@@ -37,6 +41,9 @@ func main() {
 	} else if os.Args[1] == "delPeer" {
 		//添加addPeer节点
 		delPeer(name, os.Args[3])
+	} else if os.Args[1] == "install" {
+		//添加addPeer节点
+		install(name)
 	} else {
 		help(fName)
 	}
@@ -49,25 +56,35 @@ func help(fName string) {
 	fmt.Println(fName + " delPeer  name pubkey")
 }
 
+func install(name string) {
+	tool.WgUp(name)
+}
+
 func start(name string) {
-	_, err := os.Stat(name + ".conf")
+	confFile := getConfPath(name)
+	_, err := os.Stat(confFile)
 	if err != nil {
-		genServerConf(name)
+		genServerConf(confFile)
 	}
-	conf, _ := tool.FileToConf(name)
-	go tool.WgUp(name)
+	conf, _ := tool.FileToConf(confFile)
+	runFlag := make(chan error)
+	tool.WinWgUp(name, runFlag)
 	time.Sleep(time.Second * 10)
 	client, _ := wgctrl.New()
-	xx, err := client.Devices()
-	fmt.Printf("Devices:%+v err:%+v\r\n", xx, err)
 	defer client.Close()
 	err = client.ConfigureDevice(name, conf)
-	select {}
+	// 捕获系统信号
+	quit := make(chan os.Signal)
+	// 前台时，按 ^C 时触发
+	signal.Notify(quit, syscall.SIGINT)
+	// 后台时，kill 时触发。kill -9 时的信号 SIGKILL 不能捕捉，所以不用添加
+	signal.Notify(quit, syscall.SIGTERM)
+	<-quit
 }
-func genServerConf(name string) {
-	_, err := os.Stat(name + ".conf")
+func genServerConf(confFile string) {
+	_, err := os.Stat(confFile)
 	if err == nil {
-		fmt.Println("Configuration file " + name + ".conf already exists")
+		fmt.Println("Configuration file " + confFile + " already exists")
 		return
 	}
 	serverKey, _ := wgtypes.GeneratePrivateKey()
@@ -76,15 +93,16 @@ func genServerConf(name string) {
 		ListenPort: tool.IntPtr(51820),
 		//ReplacePeers: true,
 	}
-	var allowedIP = tool.MustCIDR("192.168.6.1/32")
-	tool.ConfToFile(name, conf, &allowedIP)
+	tool.ConfToFile(confFile, conf, "192.168.6.1/24", true)
 }
 func addPeer(name string) {
+	confFile := getConfPath(name)
 	peerKey, _ := wgtypes.GeneratePrivateKey()
 	//读取服务器配置文件
-	ServerConf, address := tool.FileToConf(name)
+	ServerConf, address := tool.FileToConf(confFile)
+
 	//生成peer配置文件
-	var allowedIP = tool.MustCIDR("192.168.6.1/32")
+	var allowedIP = tool.MustCIDR(address)
 	var allowedIPs = []net.IPNet{
 		allowedIP,
 	}
@@ -100,35 +118,55 @@ func addPeer(name string) {
 			},
 		},
 	}
+
+	peerAddrs := []string{}
+	for i := 0; i < len(ServerConf.Peers); i++ {
+		for j := 0; j < len(ServerConf.Peers[i].AllowedIPs); j++ {
+			peerAddrs = append(peerAddrs, ServerConf.Peers[i].AllowedIPs[j].IP.String())
+		}
+	}
+
 	//添加到服务器peer节点
+
+	_clientAddress, _ := tool.GetNextAvailableIP(address, peerAddrs)
+	clientAddress := _clientAddress + "/32"
+	_, clientMask, _ := net.ParseCIDR(clientAddress)
+
 	peerInfo := wgtypes.PeerConfig{
-		PublicKey:  peerKey.PublicKey(),
-		AllowedIPs: allowedIPs,
+		PublicKey: peerKey.PublicKey(),
+		AllowedIPs: []net.IPNet{
+			*clientMask,
+		},
 	}
 	ServerConf.Peers = append(ServerConf.Peers, peerInfo)
 	//生成server配置文件
-	tool.ConfToFile(name, ServerConf, &address)
-	address.IP[3] = address.IP[3] + 1
+	tool.ConfToFile(confFile, ServerConf, address, true)
+
 	//生成peer配置文件
-	pubKeyByte := peerKey.PublicKey()
-	var h = md5.New()
-	h.Write(pubKeyByte[:])
-	md5Str := hex.EncodeToString(h.Sum(nil))
-	tool.ConfToFile(name+"_peer_"+md5Str[:5], peerConf, &address)
+	tool.ConfToFile(getConfPath(name+"_peer_"+_clientAddress), peerConf, clientAddress, false)
 }
 
 func delPeer(name string, pubKey string) {
+	confFile := getConfPath(name)
 	//读取服务器配置文件
-	ServerConf, address := tool.FileToConf(name)
+	ServerConf, address := tool.FileToConf(confFile)
 	publicKey, _ := wgtypes.ParseKey(pubKey)
 
+	var clientAddr = ""
 	for i := 0; i < len(ServerConf.Peers); i++ {
 		if ServerConf.Peers[i].PublicKey == publicKey {
+			if len(ServerConf.Peers[i].AllowedIPs) > 0 {
+				clientAddr = ServerConf.Peers[i].AllowedIPs[0].IP.String()
+			}
 			ServerConf.Peers = append(ServerConf.Peers[:i], ServerConf.Peers[i+1:]...)
 			i--
 		}
 	}
 	//修改server配置文件
-	tool.ConfToFile(name, ServerConf, &address)
-	os.Remove(name + "_peer_" + hex.EncodeToString(publicKey[:]) + ".conf")
+	tool.ConfToFile(confFile, ServerConf, address, true)
+	os.Remove(getConfPath(name + "_peer_" + clientAddr))
+}
+
+func getConfPath(name string) string {
+	return "./conf" + "/" + name + ".conf"
 }
