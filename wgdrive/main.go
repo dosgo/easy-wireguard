@@ -33,7 +33,6 @@ func (p program) run() {
 func main() {
 	if len(os.Args) >= 2 {
 		devName = os.Args[1]
-		return
 	}
 	serviceConfig := &service.Config{
 		Name:        serviceName,
