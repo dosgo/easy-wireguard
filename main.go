@@ -66,7 +66,7 @@ func start(name string) {
 	if err != nil {
 		genServerConf(confFile)
 	}
-	conf, _ := tool.FileToConf(confFile)
+	conf, serverIP := tool.FileToConf(confFile)
 	go tool.WgUp(name)
 	time.Sleep(time.Second * 5)
 	client, err := wgctrl.New()
@@ -78,6 +78,8 @@ func start(name string) {
 	if err != nil {
 		fmt.Printf("ConfigureDevice Err:%+v\r\n", err)
 	}
+	ip, cidr, err := net.ParseCIDR(serverIP)
+	tool.SetupWindowsNetwork(name, ip.String(), net.IP(cidr.Mask).To4().String())
 	// 捕获系统信号
 	quit := make(chan os.Signal)
 	// 前台时，按 ^C 时触发
